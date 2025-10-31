@@ -30,7 +30,7 @@ module.exports = {
 		version: "1.17",
 		author: "NTKhang",
 		countDown: 5,
-		role: 2,
+		role: 4,
 		description: {
 			vi: "Quản lý các tệp lệnh của bạn",
 			en: "Manage your command files"
@@ -96,11 +96,6 @@ module.exports = {
 	},
 
 	onStart: async ({ args, message, api, threadModel, userModel, dashBoardModel, globalModel, threadsData, usersData, dashBoardData, globalData, event, commandName, getLang }) => {
-		const permission = global.GoatBot.config.owner;
-  if (!permission.includes(event.senderID)) {
-    api.sendMessage("You dont have enough permission to use this command 🐸👋", event.threadID, event.messageID);
-    return;
-  }
 		const { unloadScripts, loadScripts } = global.utils;
 		if (
 			args[0] == "load"
