@@ -4,22 +4,17 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 module.exports = {
 	config: {
 		name: "adduser",
-		aliases:["add"],
-		version: "1.4",
+		version: "1.5",
 		author: "NTKhang",
 		countDown: 5,
 		role: 1,
-		shortDescription: {
-			vi: "Thêm thành viên vào box chat",
-			en: "Add user to box chat"
-		},
-		longDescription: {
+		description: {
 			vi: "Thêm thành viên vào box chat của bạn",
 			en: "Add user to box chat of you"
 		},
 		category: "box chat",
 		guide: {
-			en: "   {pn} [link profile | uid] (or reply to a message)"
+			en: "   {pn} [link profile | uid]"
 		}
 	},
 
@@ -49,11 +44,6 @@ module.exports = {
 	onStart: async function ({ message, api, event, args, threadsData, getLang }) {
 		const { members, adminIDs, approvalMode } = await threadsData.get(event.threadID);
 		const botID = api.getCurrentUserID();
-
-		// যদি কেউ মেসেজ রিপ্লাই দিয়ে কমান্ড চালায়, তাহলে রিপ্লাই করা ইউজারের UID নেওয়া হবে
-		if (event.type == "message_reply") {
-			args = [event.messageReply.senderID]; // আগের আর্গুমেন্ট মুছে শুধুমাত্র রিপ্লাই করা ইউজারের UID নেওয়া হবে
-		}
 
 		const success = [
 			{
