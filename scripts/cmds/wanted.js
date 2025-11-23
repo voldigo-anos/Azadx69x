@@ -5,7 +5,7 @@ module.exports = {
   config: {
     name: "wanted",
     version: "1.0",
-    author: "KSHITIZ",
+    author: "KSHiTIZ",
     countDown: 1,
     role: 0,
     shortDescription: "wanted poster",
