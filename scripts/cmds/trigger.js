@@ -5,7 +5,7 @@ module.exports = {
 	config: {
 		name: "trigger",
 		version: "1.1",
-		author: "NTKhang",
+		author: "NtKhang",
 		countDown: 5,
 		role: 0,
 		shortDescription: "Trigger image",
