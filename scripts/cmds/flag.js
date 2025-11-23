@@ -1,135 +1,149 @@
 const axios = require("axios");
 
-const USAGE_LIMIT = 15;
-const RESET_TIME = 7 * 60 * 60 * 1000; // 7 hours
-
-const baseApiUrl = async () => {
-  const base = await axios.get("https://raw.githubusercontent.com/mahmudx7/exe/main/baseApiUrl.json");
-  return base.data.mahmud;
-};
+async function toFont(text, id = 3) {
+  try {
+    const apiUrl = `https://xsaim8x-xxx-api.onrender.com/api/font?id=${id}&text=${encodeURIComponent(text)}`;
+    const { data } = await axios.get(apiUrl);
+    return data.output || text;
+  } catch (e) {
+    console.error("Font API error:", e.message);
+    return text;
+  }
+}
 
 module.exports = {
   config: {
-    name: "flaggame",
-    aliases: ["flag"],
-    version: "1.7",
-    author: "MahMUD",
+    name: "flagquiz",
+    aliases: ["flag", "fqz", "flagguess"],
+    version: "1.0",
+    author: "Saimx69x",
     countDown: 10,
     role: 0,
     category: "game",
     guide: {
-      en: "{pn} - Guess the flag to earn coins and XP!"
+      en: "{pn} — Flag guessing quiz"
     }
   },
 
-  onReply: async function ({ api, event, Reply, usersData }) {
-    const { flag, author } = Reply;
-    const getCoin = 500;
-    const getExp = 121;
-    const userData = await usersData.get(event.senderID);
-
-    if (event.senderID !== author) {
-      return api.sendMessage("⚠️ | Ei challenge ta tomar na, baby! 🐸", event.threadID, event.messageID);
-    }
-
-    const reply = event.body.toLowerCase();
-    await api.unsendMessage(Reply.messageID);
-
-    if (reply === flag.toLowerCase()) {
-      userData.money += getCoin;
-      userData.exp += getExp;
-      await usersData.set(event.senderID, userData);
-
-      return api.sendMessage(
-        `✅ | 𝐂𝐨𝐫𝐫𝐞𝐜𝐭 𝐀𝐧𝐬𝐰𝐞𝐫! 🥳\n━━━━━━━━━━━━━━\n🏅 𝐑𝐞𝐰𝐚𝐫𝐝𝐬:\n➤ 💰 +${getCoin} coins\n➤ ✨ +${getExp} exp\n━━━━━━━━━━━━━━\nKeep playing and become the Flag Master! 🏆`,
-        event.threadID,
-        event.messageID
-      );
-    } else {
-      return api.sendMessage(
-        `❌ | 𝐖𝐫𝐨𝐧𝐠 𝐀𝐧𝐬𝐰𝐞𝐫! 😢\n━━━━━━━━━━━━━━\n💡 Correct answer was: 🌍 ${flag}\n━━━━━━━━━━━━━━\nTry again next time, explorer! 🧭`,
-        event.threadID,
-        event.messageID
-      );
-    }
-  },
-
-  onStart: async function ({ api, event, usersData }) {
+  onStart: async function ({ api, event }) {
     try {
-      const userData = await usersData.get(event.senderID) || {};
-      const now = Date.now();
+      const apiUrl = "https://xsaim8x-xxx-api.onrender.com/api/flag";
+      const { data } = await axios.get(apiUrl);
 
-      // Initialize or reset usage tracking
-      if (!userData.flagGameUsage) {
-        userData.flagGameUsage = {
-          count: 0,
-          lastReset: now
-        };
-      }
+      const { image, options, answer } = data;
 
-      if (now - userData.flagGameUsage.lastReset >= RESET_TIME) {
-        userData.flagGameUsage.count = 0;
-        userData.flagGameUsage.lastReset = now;
-      }
-
-      // Limit check
-      if (userData.flagGameUsage.count >= USAGE_LIMIT) {
-        const remainingTime = RESET_TIME - (now - userData.flagGameUsage.lastReset);
-        const minutes = Math.ceil(remainingTime / (60 * 1000));
-        return api.sendMessage(
-          `⏳ | 𝐋𝐢𝐦𝐢𝐭 𝐫𝐞𝐚𝐜𝐡𝐞𝐝!\n━━━━━━━━━━━━━━\nYou’ve played this game 15 times already.\nPlease wait ${minutes} more minutes to play again.\n━━━━━━━━━━━━━━\n🎮 Keep your mind sharp, champ!`,
-          event.threadID,
-          event.messageID
-        );
-      }
-
-      // Increase usage count and save
-      userData.flagGameUsage.count += 1;
-      await usersData.set(event.senderID, userData);
-
-      // Fetch and send flag
-      const apiUrl = await baseApiUrl();
-      const response = await axios.get(`${apiUrl}/api/flag`, {
-        responseType: "json",
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-
-      const { link, country } = response.data;
       const imageStream = await axios({
         method: "GET",
-        url: link,
-        responseType: "stream",
-        headers: { 'User-Agent': 'Mozilla/5.0' }
+        url: image,
+        responseType: "stream"
       });
+
+      const body = await toFont(`》 Flag Quiz 🚩
+━━━━━━━━━━━━━━
+📸 Guess the country of this flag!
+🅐 ${options.A}
+🅑 ${options.B}
+🅒 ${options.C}
+🅓 ${options.D}
+
+⏳ You have 1 minute 30 seconds!
+💡 You have 3 chances! Reply with A, B, C or D.`);
 
       api.sendMessage(
         {
-          body: "🌍 | 𝐅𝐥𝐚𝐠 𝐆𝐚𝐦𝐞 𝐓𝐢𝐦𝐞!\n━━━━━━━━━━━━━━\nCan you guess the name of this country’s flag?\nReply within 40 seconds to answer! ⏱️",
+          body,
           attachment: imageStream.data
         },
         event.threadID,
-        (error, info) => {
+        async (err, info) => {
+          if (err) return;
+          
           global.GoatBot.onReply.set(info.messageID, {
             commandName: this.config.name,
             type: "reply",
             messageID: info.messageID,
             author: event.senderID,
-            flag: country
+            correctAnswer: answer,
+            chances: 3,
+            answered: false
           });
 
-          setTimeout(() => {
-            api.unsendMessage(info.messageID);
-          }, 40000);
+          setTimeout(async () => {
+            const quizData = global.GoatBot.onReply.get(info.messageID);
+            if (quizData && !quizData.answered) {
+              await api.unsendMessage(info.messageID);
+              const msg = await toFont(`⏰ Time's up!
+✅ The correct option was: ${answer}`);
+              api.sendMessage(msg, event.threadID);
+              global.GoatBot.onReply.delete(info.messageID);
+            }
+          }, 90000);
         },
         event.messageID
       );
-    } catch (error) {
-      console.error(`Error: ${error.message}`);
-      api.sendMessage(
-        `🚨 | 𝐄𝐫𝐫𝐨𝐫 𝐨𝐜𝐜𝐮𝐫𝐫𝐞𝐝:\n${error.message}`,
-        event.threadID,
-        event.messageID
-      );
+    } catch (err) {
+      console.error(err);
+      const failMsg = await toFont("❌ Failed to fetch flag data.");
+      api.sendMessage(failMsg, event.threadID, event.messageID);
+    }
+  },
+
+  onReply: async function ({ api, event, Reply, usersData }) {
+    let { author, correctAnswer, messageID, chances } = Reply;
+    const reply = event.body?.trim().toUpperCase();
+
+    if (event.senderID !== author) {
+      const msg = await toFont("⚠️ This is not your quiz!");
+      return api.sendMessage(msg, event.threadID, event.messageID);
+    }
+
+    if (!reply || !["A", "B", "C", "D"].includes(reply)) {
+      const msg = await toFont("❌ Please reply with A, B, C or D.");
+      return api.sendMessage(msg, event.threadID, event.messageID);
+    }
+
+    if (reply === correctAnswer) {
+      await api.unsendMessage(messageID);
+
+      const rewardCoin = 300;
+      const rewardExp = 100;
+      const userData = await usersData.get(event.senderID);
+      userData.money += rewardCoin;
+      userData.exp += rewardExp;
+      await usersData.set(event.senderID, userData);
+
+      const correctMsg = await toFont(`🎉 Congratulations!
+
+✅ You answered correctly!
+💰 You earned ${rewardCoin} Coins
+🌟 You gained ${rewardExp} EXP
+
+🚩 You recognized the right flag, you are the true champion!`);
+
+      if (global.GoatBot.onReply.has(messageID)) {
+        global.GoatBot.onReply.get(messageID).answered = true;
+        global.GoatBot.onReply.delete(messageID);
+      }
+
+      return api.sendMessage(correctMsg, event.threadID, event.messageID);
+    } else {
+      chances--;
+
+      if (chances > 0) {
+        global.GoatBot.onReply.set(messageID, {
+          ...Reply,
+          chances
+        });
+
+        const wrongTryMsg = await toFont(`❌ Wrong answer!
+⏳ You still have ${chances} chance(s) left. Try again!`);
+        return api.sendMessage(wrongTryMsg, event.threadID, event.messageID);
+      } else {
+        await api.unsendMessage(messageID);
+        const wrongMsg = await toFont(`🥺 Out of chances!
+✅ The correct option was: ${correctAnswer}`);
+        return api.sendMessage(wrongMsg, event.threadID, event.messageID);
+      }
     }
   }
 };
