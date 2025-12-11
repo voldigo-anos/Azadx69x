@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 
+// Register a default font if available in assets (non-fatal)
 try {
   registerFont(path.join(__dirname, "assets", "font", "BebasNeue-Regular.ttf"), { family: "Bebas" });
 } catch (e) { /* ignore if font not present */ }
@@ -22,7 +23,8 @@ module.exports = {
     longDescription: "Complete banking with ATM card generator (premium), transactions, savings, statements, and multi-card support.",
     category: "finance",
   },
-    
+
+  // ------------------ Utilities ------------------
   formatMoney(amount) {
     if (amount === undefined || amount === null || isNaN(Number(amount))) return `${CURRENCY_SYMBOL}0`;
     amount = Number(amount);
@@ -45,6 +47,7 @@ module.exports = {
   },
 
   generateCardNumber() {
+    // Use prefix 5284 like original, ensure unique-ish
     return "5284 " +
       ("" + Math.floor(1000 + Math.random() * 9000)) + " " +
       ("" + Math.floor(1000 + Math.random() * 9000)) + " " +
@@ -62,6 +65,7 @@ module.exports = {
   },
 
   generateAccountNumber() {
+    // 10-digit account number
     return Math.floor(1000000000 + Math.random() * 9000000000).toString();
   },
 
@@ -74,16 +78,18 @@ module.exports = {
   nowISO() {
     return new Date().toISOString();
   },
-    
+
+  // ------------------ Configurable limits ------------------
   SYSTEM: {
     MIN_DEPOSIT: 1,
     MIN_WITHDRAW: 1,
     MIN_TRANSFER: 1,
-    DAILY_TRANSFER_LIMIT: 50000,
+    DAILY_TRANSFER_LIMIT: 50000, // currency units per day
     DAILY_WITHDRAW_LIMIT: 20000,
     MAX_CARDS_PER_USER: 3
   },
-    
+
+  // ------------------ Card designs ------------------
   cardDesigns: {
     premium: {
       gradient: ["#0b0f14", "#1a1a1a", "#2b2b2b"],
@@ -102,20 +108,23 @@ module.exports = {
       textMuted: "#c8d8e8"
     }
   },
-    
+
+  // ------------------ Card generator (Professional) ------------------
   async createRealCard(card, username = "User", balance = 0, transactions = [], designKey = "premium") {
     const width = 900, height = 560;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext("2d");
     const d = this.cardDesigns[designKey] || this.cardDesigns.premium;
-      
+
+    // Background gradient
     const bg = ctx.createLinearGradient(0, 0, width, height);
     bg.addColorStop(0, d.gradient[0]);
     bg.addColorStop(0.5, d.gradient[1]);
     bg.addColorStop(1, d.gradient[2]);
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
-      
+
+    // Subtle pattern overlay
     ctx.globalAlpha = 0.06;
     for (let i = 0; i < 90; i++) {
       ctx.beginPath();
@@ -124,7 +133,8 @@ module.exports = {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-      
+
+    // Top-right logo text
     ctx.font = "bold 36px Bebas, sans-serif";
     ctx.fillStyle = d.accent;
     ctx.textAlign = "right";
@@ -230,7 +240,8 @@ module.exports = {
       if (stroke) ctx.stroke();
     }
   },
-    
+
+  // ------------------ Language strings ------------------
   langs: {
     en: {
       menu: `
@@ -295,7 +306,8 @@ Welcome to ${BANK_NAME}!`,
       noSavings: "❌ You have no savings!"
     }
   },
-    
+
+  // ------------------ Main command handler ------------------
   async onStart({ message, args, usersData, event }) {
     try {
       const uid = event.senderID;
@@ -564,44 +576,61 @@ Thank you for banking with us!`;
           return message.reply(msg);
         }
 
-        // show card image
+        // show card (image)
         if (sub === "show") {
           const id = args[2];
-          if (!id) return message.reply("❌ Specify card id. Ex: bank card show card_xxxxxx");
+          if (!id) return message.reply("❌ Provide card ID.\nUse: bank card list");
           const card = findCardById(id);
-          if (!card) return message.reply("❌ Card not found.");
-          // generate image using createRealCard
-          const image = await this.createRealCard(card, userData.name || "User", userData.data.bank.balance, userData.data.bank.transactions, "premium");
+          if (!card) return message.reply("❌ Card not found!");
+
+          const file = await this.createRealCard(
+            card,
+            userData.name || "User",
+            userData.data.bank.balance,
+            userData.data.bank.transactions,
+            "premium"
+          );
+
           return message.reply({
-            body: `💳 Card: ${card.id}\nNumber: ${card.number}\nExpiry: ${card.expiry}\nStatus: ${card.active ? "ACTIVE" : "INACTIVE"}`,
-            attachment: fs.createReadStream(image)
+            body: `💳 CARD PREVIEW\nID: ${id}`,
+            attachment: fs.createReadStream(file)
           });
         }
 
         // block card
         if (sub === "block") {
           const id = args[2];
-          if (!id) return message.reply("❌ Specify card id. Ex: bank card block card_xxxxxx");
+          if (!id) return message.reply("❌ Provide card ID.");
+
           const card = findCardById(id);
-          if (!card) return message.reply("❌ Card not found.");
+          if (!card) return message.reply("❌ Card not found!");
+
           card.active = false;
           await saveUser();
           return message.reply(this.langs.en.cardBlocked);
         }
 
-        // activate card
+        // activate card (requires PIN)
         if (sub === "activate") {
           const id = args[2];
-          if (!id) return message.reply("❌ Specify card id. Ex: bank card activate card_xxxxxx");
+          const pin = args[3];
+
+          if (!id) return message.reply("❌ Provide card ID.");
+          if (!pin) return message.reply("❌ Provide PIN.");
+          if (pin.length !== 4 || isNaN(pin)) return message.reply(this.langs.en.invalidPin);
+
           const card = findCardById(id);
-          if (!card) return message.reply("❌ Card not found.");
+          if (!card) return message.reply("❌ Card not found!");
+
+          if (pin !== card.pin) return message.reply("❌ Wrong PIN!");
+
           card.active = true;
           await saveUser();
           return message.reply(this.langs.en.cardActivated);
         }
 
         // default card command help
-        return message.reply("Card commands:\nbank card apply <type>\nbank card list\nbank card show <id>\nbank card block <id>\nbank card activate <id>");
+        return message.reply("Card commands:\nbank card apply <type>\nbank card list\nbank card show <id>\nbank card block <id>\nbank card activate <id> <pin>");
       }
 
       // ---------- RAW: show internal data (developer only) ----------
