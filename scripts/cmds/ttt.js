@@ -2,39 +2,23 @@ const fs = require("fs");
 const path = require("path");
 const { createCanvas } = require("canvas");
 
-let games = {};
+// Use a Map instead of object for better management
+const games = new Map();
 
-// 🎨 Background Themes
-const backgrounds = {
-  neon: {
-    primary: "#0f0f1a",
-    grid: "#9b59b6",
-    xColor: "#3498db",
-    oColor: "#e67e22",
-    titleBg: "#8e44ad"
-  },
-  cyberpunk: {
-    primary: "#1a1a2e",
-    grid: "#00ff9d",
-    xColor: "#ff0080",
-    oColor: "#00eeff",
-    titleBg: "#16213e"
-  }
+// Simple theme
+const theme = {
+  primary: "#0f0f1a",
+  grid: "#9b59b6",
+  xColor: "#3498db",
+  oColor: "#e67e22",
+  titleBg: "#8e44ad"
 };
-
-// 🎮 Theme Selection Function
-function getRandomTheme() {
-  const themes = Object.keys(backgrounds);
-  return backgrounds[themes[Math.floor(Math.random() * themes.length)]];
-}
 
 // 🖼️ Board Render Function
 function renderBoard(board, playerXName, playerOName) {
   const canvas = createCanvas(400, 460);
   const ctx = canvas.getContext("2d");
 
-  const theme = getRandomTheme();
-  
   // Background
   ctx.fillStyle = theme.primary;
   ctx.fillRect(0, 0, 400, 460);
@@ -110,57 +94,46 @@ function checkWinner(board) {
   return null;
 }
 
-// ⏰ Timer reset function
-function resetTimer(gameId, message) {
-  const game = games[gameId];
-  if (!game) return;
-
-  if (game.timeout) clearTimeout(game.timeout);
-
-  game.timeout = setTimeout(() => {
-    delete games[gameId];
-    message.reply("⏰ Time's up! Game cancelled.");
-  }, 60000);
-}
-
 module.exports = {
   config: {
     name: "ttt",
     aliases: ["tictactoe", "xoxo"],
-    version: "3.0",
+    version: "2.0",
     author: "Azadx69x",
     countDown: 5,
     role: 0,
     shortDescription: "Play Tic Tac Toe",
-    longDescription: "Play Tic Tac Toe game with mention",
+    longDescription: "Play Tic Tac Toe game",
     category: "game",
     guide: {
-      en: "/ttt @mention → start game\nThen reply with 1-9"
+      en: "{pn} @mention → start game\nThen reply with 1-9"
     }
   },
 
   onStart: async function ({ message, event, usersData }) {
     try {
-      // Make a copy of event to avoid const issues
-      const eventData = JSON.parse(JSON.stringify(event));
+      // Get mentions from event object
+      const mentions = event.mentions ? Object.keys(event.mentions) : [];
       
-      const mentions = Object.keys(eventData.mentions || {});
       if (mentions.length === 0) {
         return message.reply("❌ Please mention someone to start the game!");
       }
 
-      const playerX = eventData.senderID;
+      const playerX = event.senderID;
       const playerO = mentions[0];
 
       const playerXName = await usersData.getName(playerX);
       const playerOName = await usersData.getName(playerO);
 
-      const gameId = `${eventData.threadID}`;
-      if (games[gameId]) {
+      const gameId = event.threadID;
+      
+      // Check if game exists using Map
+      if (games.has(gameId)) {
         return message.reply("⚠️ A game is already running in this group!");
       }
 
-      games[gameId] = {
+      // Create game object
+      const game = {
         board: Array(9).fill(null),
         players: { X: playerX, O: playerO },
         names: { X: playerXName, O: playerOName },
@@ -168,102 +141,141 @@ module.exports = {
         timeout: null
       };
 
-      resetTimer(gameId, message);
+      // Store game in Map
+      games.set(gameId, game);
 
-      const img = renderBoard(games[gameId].board, playerXName, playerOName);
-      const filePath = path.join(__dirname, "ttt.png");
+      // Set timeout
+      game.timeout = setTimeout(() => {
+        if (games.has(gameId)) {
+          games.delete(gameId);
+          message.reply("⏰ Time's up! Game cancelled.");
+        }
+      }, 60000);
+
+      // Render and send board
+      const img = renderBoard(game.board, playerXName, playerOName);
+      const filePath = path.join(__dirname, "ttt_board.png");
       
-      // Use writeFile instead of writeFileSync to avoid blocking
       fs.writeFile(filePath, img, (err) => {
         if (err) {
           console.error("Error saving image:", err);
-          message.reply("❌ Error creating game board.");
-          delete games[gameId];
-          return;
+          games.delete(gameId);
+          return message.reply("❌ Error creating game board.");
         }
         
         message.reply({
-          body: `🎮 Tic Tac Toe Started!\n\n👉 ${playerXName} = X\n👉 ${playerOName} = O\n\nFirst turn: X`,
+          body: `🎮 Tic Tac Toe Started!\n\n${playerXName} (X) vs ${playerOName} (O)\n\nFirst turn: X (${playerXName})\nReply with numbers 1-9`,
           attachment: fs.createReadStream(filePath)
         });
       });
 
     } catch (error) {
-      console.error("Error in onStart:", error);
+      console.error("Error in ttt onStart:", error);
       message.reply("❌ An error occurred while starting the game.");
     }
   },
 
   onChat: async function ({ message, event }) {
     try {
-      // Make a copy of event to avoid const issues
-      const eventData = JSON.parse(JSON.stringify(event));
+      const gameId = event.threadID;
       
-      const gameId = `${eventData.threadID}`;
-      const game = games[gameId];
-      if (!game) return;
+      // Check if game exists
+      if (!games.has(gameId)) {
+        return;
+      }
 
-      // Check if message is a number
-      const body = String(eventData.body || "").trim();
+      const game = games.get(gameId);
+      
+      // Parse the move
+      const body = String(event.body || "").trim();
       const move = parseInt(body);
-      if (isNaN(move) || move < 1 || move > 9) return;
+      
+      // Check if it's a valid move number
+      if (isNaN(move) || move < 1 || move > 9) {
+        return;
+      }
 
-      const player = Object.keys(game.players).find(
-        key => game.players[key] === eventData.senderID
-      );
+      // Check if sender is a player
+      const player = event.senderID === game.players.X ? "X" : 
+                     event.senderID === game.players.O ? "O" : null;
+      
+      if (!player) {
+        return;
+      }
 
-      if (!player) return;
+      // Check if it's player's turn
       if (game.turn !== player) {
         return message.reply("⏳ It's not your turn!");
       }
 
       const index = move - 1;
+      
+      // Check if cell is empty
       if (game.board[index]) {
         return message.reply("❌ This cell is already filled!");
       }
 
+      // Make move
       game.board[index] = player;
-      game.turn = game.turn === "X" ? "O" : "X";
+      game.turn = player === "X" ? "O" : "X";
 
-      resetTimer(gameId, message);
+      // Reset timeout
+      if (game.timeout) {
+        clearTimeout(game.timeout);
+      }
+      
+      game.timeout = setTimeout(() => {
+        if (games.has(gameId)) {
+          games.delete(gameId);
+          message.reply("⏰ Time's up! Game cancelled.");
+        }
+      }, 60000);
 
+      // Check for winner
       const winner = checkWinner(game.board);
+      
+      // Render board
       const img = renderBoard(game.board, game.names.X, game.names.O);
       const filePath = path.join(__dirname, "ttt_current.png");
       
       fs.writeFile(filePath, img, (err) => {
         if (err) {
           console.error("Error saving image:", err);
-          message.reply("❌ Error updating game board.");
-          return;
+          return message.reply("❌ Error updating game board.");
         }
 
         if (winner) {
-          clearTimeout(game.timeout);
-          delete games[gameId];
+          // Clear timeout
+          if (game.timeout) {
+            clearTimeout(game.timeout);
+          }
+          
+          // Remove game
+          games.delete(gameId);
 
           if (winner === "draw") {
             message.reply({
-              body: "🤝 It's a draw!",
+              body: "🤝 Game ended in a draw!",
               attachment: fs.createReadStream(filePath)
             });
           } else {
+            const winnerName = game.names[winner];
             message.reply({
-              body: `🏆 Winner: ${game.names[winner]} (${winner})`,
+              body: `🏆 ${winnerName} (${winner}) wins!`,
               attachment: fs.createReadStream(filePath)
             });
           }
         } else {
+          const currentPlayerName = game.names[game.turn];
           message.reply({
-            body: `👉 Now it's ${game.names[game.turn]}'s (${game.turn}) turn`,
+            body: `👉 Now it's ${currentPlayerName}'s turn (${game.turn})\nReply with numbers 1-9`,
             attachment: fs.createReadStream(filePath)
           });
         }
       });
 
     } catch (error) {
-      console.error("Error in onChat:", error);
-      // Don't send error message to avoid spam
+      console.error("Error in ttt onChat:", error);
     }
   }
 };
