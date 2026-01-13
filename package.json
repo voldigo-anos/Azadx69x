@@ -2,7 +2,7 @@
   "name": "x69x-bot-v2",
   "version": "2.0.0",
   "description": "X69X BOT V2 - Node 20 compatible version",
-  "start": "node index.js",
+  "main": "index.js",
   "engines": {
     "node": "20.x",
     "npm": ">=7.0.0"
@@ -76,6 +76,7 @@
   },
   "scripts": {
     "start": "node index.js",
+    "build": "npm install",
     "dev": "NODE_ENV=development node index.js",
     "prod": "NODE_ENV=production node index.js",
     "update": "npm update",
