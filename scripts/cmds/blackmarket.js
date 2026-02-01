@@ -1,7 +1,7 @@
 const axios = require("axios");
 
-const cmdsInfoUrl = "https://raw.githubusercontent.com/Azadwebapi/Azadx69x-blackmarket-top/refs/heads/main/cmdsinfo.json";
-const cmdsUrlJson = "https://raw.githubusercontent.com/Azadwebapi/Azadx69x-blackmarket-top/refs/heads/main/cmdsurl.json";
+const cmdsInfoUrl = "https://raw.githubusercontent.com/Azadwebapi/Azadx69x-blackmarket-top/main/cmdsinfo.json";
+const cmdsUrlJson = "https://raw.githubusercontent.com/Azadwebapi/Azadx69x-blackmarket-top/main/cmdsurl.json";
 const ITEMS_PER_PAGE = 10;
 
 module.exports = {
