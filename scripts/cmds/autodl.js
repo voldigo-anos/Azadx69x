@@ -2,8 +2,7 @@ const axios = require("axios");
 const fs = require("fs-extra");
 const path = require("path");
 
-const API_JSON_URL =
-  "https://azadx69x-all-apis-top.vercel.app/api/unidownload?url=";
+const API_JSON_URL = "https://azadx69x-all-apis-top.vercel.app/api/alldl?url=";
 
 function detectPlatform(url) {
   if (url.includes("tiktok.com")) return "𝙏𝙞𝙠𝙏𝙤𝙠";
@@ -15,7 +14,7 @@ function detectPlatform(url) {
   return "𝙐𝙣𝙠𝙣𝙤𝙬𝙣";
 }
 
-async function fetchDataWithRetry(url, retries = 2) {
+async function fetchDataWithRetry(url, retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await axios.get(url, { timeout: 30000 });
@@ -26,40 +25,65 @@ async function fetchDataWithRetry(url, retries = 2) {
   }
 }
 
+function extractMedia(result) {
+  if (result.medias && result.medias.length) {
+    return result.medias.find(m => m.quality === "hd") || result.medias[0];
+  }
+  
+  if (result.video) {
+    return { url: result.video };
+  }
+  
+  if (result.download) {
+    return { url: result.download };
+  }
+  
+  if (typeof result.result === "string" && result.result.startsWith("http")) {
+    return { url: result.result };
+  }
+  
+  if (result.images && result.images.length) {
+    return { url: result.images[0], type: "image" };
+  }
+  if (result.gallery && result.gallery.length) {
+    return { url: result.gallery[0], type: "image" };
+  }
+
+  return null;
+}
+
 module.exports = {
   config: {
     name: "autodl",
-    version: "5.2",
+    version: "0.0.7",
     author: "Azadx69x",
     role: 0,
     category: "media",
     description: {
-      en: "Auto download videos from TikTok, Facebook, Instagram, YouTube, X/Twitter, Pinterest"
+      en: "Auto downloads videos/from TikTok, Facebook, Instagram, YouTube, X/etc."
     },
     guide: { en: "[video_link]" }
   },
 
-  onStart: async function () {},
+  onStart: async () => {},
 
   onChat: async function ({ api, event }) {
     const text = event.body || "";
 
     const SUPPORTED = [
-      "https://vt.tiktok.com",
-      "https://www.tiktok.com/",
-      "https://vm.tiktok.com",
-      "https://www.facebook.com/share/v",
-      "https://www.facebook.com/share/r",
-      "https://www.instagram.com/",
-      "https://youtu.be/",
-      "https://youtube.com/",
-      "https://x.com/",
-      "https://twitter.com/",
-      "https://pin.it/",
-      "https://www.pinterest.com/"
+      "tiktok.com",
+      "facebook.com",
+      "fb.watch",
+      "instagram.com",
+      "youtu.be",
+      "youtube.com",
+      "x.com",
+      "twitter.com",
+      "pin.it",
+      "pinterest.com"
     ];
 
-    if (!SUPPORTED.some(link => text.startsWith(link))) return;
+    if (!SUPPORTED.some(link => text.includes(link))) return;
 
     api.setMessageReaction("⏳", event.messageID, () => {}, true);
     const startTime = Date.now();
@@ -71,45 +95,33 @@ module.exports = {
       
       const data = await fetchDataWithRetry(API_JSON_URL + encodeURIComponent(text));
 
-      if (!data || !data.result || !data.result.medias || !data.result.medias.length)
-        throw new Error("No video data found from API");
+      if (!data?.result) throw new Error("API returned empty result");
       
-      const media = data.result.medias.find(m => m.quality === "hd") || data.result.medias[0];
-      if (!media || !media.url) throw new Error("No valid video URL found");
-      const downloadUrl = media.url;
+      const media = extractMedia(data.result);
+      if (!media || !media.url) throw new Error("API did not return any downloadable media");
 
-      const platform = detectPlatform(text);
-      const videoAuthor = data.result.source || "Unknown";
-      const title = data.result.title || "Unknown";
-      const thumbnail = data.result.thumbnail || null;
+      const downloadUrl = media.url;
       
-      const buffer = (
-        await axios.get(downloadUrl, { responseType: "arraybuffer", timeout: 60000 })
-      ).data;
+      const buffer = (await axios.get(downloadUrl, { responseType: "arraybuffer", timeout: 60000 })).data;
       await fs.writeFile(filePath, Buffer.from(buffer));
 
       api.setMessageReaction("✅", event.messageID, () => {}, true);
       
       const fileSizeMB = (buffer.length / (1024 * 1024)).toFixed(2);
       const speed = ((Date.now() - startTime) / 1000).toFixed(2);
+      const platform = detectPlatform(text);
       
       const msg = `
 ╭━〔 ✅ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝 𝐂𝐨𝐦𝐩𝐥𝐞𝐭𝐞 〕━╮
 ┃ 📊 𝐏𝐥𝐚𝐭𝐟𝐨𝐫𝐦  : ${platform}
 ┃ 📦 𝐅𝐢𝐥𝐞 𝐒𝐢𝐳𝐞 : ${fileSizeMB} MB
-┃ ✅ 𝐒𝐭𝐚𝐭𝐮𝐬    : Downloaded
-┃ ⚡ 𝐃𝐨𝐰𝐧𝐥𝐨𝐚𝐝 𝐒𝐩𝐞𝐞𝐝 : ${speed}s
+┃ ⚡ 𝐒𝐩𝐞𝐞𝐝     : ${speed}s
 ╰━━━━━━━━━━━━━━━━━━╯
 👀 𝐌𝐚𝐝𝐞 𝐛𝐲 𝐀𝐳𝐚𝐝𝐱69x
 `;
-
-      const messageOptions = {
-        body: msg,
-        attachment: fs.createReadStream(filePath)
-      };
-
+      
       api.sendMessage(
-        messageOptions,
+        { body: msg, attachment: fs.createReadStream(filePath) },
         event.threadID,
         () => fs.unlinkSync(filePath),
         event.messageID
@@ -118,11 +130,7 @@ module.exports = {
     } catch (err) {
       console.error(err);
       api.setMessageReaction("❌", event.messageID, () => {}, true);
-      api.sendMessage(
-        `❌ Error: ${err.message}`,
-        event.threadID,
-        event.messageID
-      );
+      api.sendMessage(`❌ Error: ${err.message}`, event.threadID, event.messageID);
     }
   }
 };
