@@ -19,7 +19,7 @@ module.exports = {
 			delayPerGroup: 300
 		},
 		adminBot: [
-			"61585772322631"
+			"61580333625022"
 		]
 	},
 
